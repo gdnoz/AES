@@ -70,8 +70,6 @@ unsigned char mul(unsigned char byte, unsigned char factor)
 {
     unsigned char ret = byte;
 
-    //printf("\t%x * %x = ", byte, factor);
-
     switch(factor)
     {
         case 0x2:
@@ -106,8 +104,6 @@ unsigned char mul(unsigned char byte, unsigned char factor)
         }
     }
 
-    //printf("%x\n", ret);
-
     return ret;
 }
 
@@ -115,7 +111,6 @@ unsigned char* addRoundKey(unsigned char* block, unsigned char* key)
 {
     for (int i = 0; i < BLOCK_SIZE; i++)
     {
-        //printf("%x + %x = %x\n", block[i], key[i], block[i] ^ key[i]);
         block[i] = block[i] ^ key[i];
     }
 
@@ -177,9 +172,7 @@ unsigned char* doMixColumns(unsigned char* block, unsigned char mat[BLOCK_WIDTH]
 
             // Assign val to rorresponding column value
             col[j] = val;
-            //printf("%x -> %x\n", block[i+j*BLOCK_WIDTH], val);
         }
-        //printf("\n");
 
         // Assign calculated column values to corresponding block values
         for (int j = 0; j < BLOCK_WIDTH; j++)
@@ -226,17 +219,11 @@ unsigned char* getRoundKey(int rd)
     // Get previous key
     if (rd == 0)
     {
-        for (int i = 0; i < BLOCK_SIZE; i++)
-        {
-            keySchedule[rd][i] = KEY[i];
-        }
+        strcpy((char*)keySchedule[rd], (char*)KEY);
     }
     else
     {
-        for (int i = 0; i < BLOCK_SIZE; i++)
-        {
-            keySchedule[rd][i] = keySchedule[rd-1][i];
-        }
+        strcpy((char*)keySchedule[rd], (char*)keySchedule[rd-1]);
     }
 
     // Rotate all rows by 1
@@ -318,28 +305,26 @@ unsigned char* encryptBlock(unsigned char* msg)
 {
     int round = 0;
 
-    // 1. generateKeySchedule
-    generateKeySchedule();
-    // 2. addRoundKey
+    // 1. addRoundKey
     addRoundKey(msg, keySchedule[round]);
-    // 3. 9 rounds:
+    // 2. 9 rounds:
     for (round++; round < ROUNDS; round++)
     {
-        // 3.1. subBytes
+        // 2.1. subBytes
         subBytes(msg);
-        // 3.2. shiftRows
+        // 2.2. shiftRows
         shiftRows(msg);
-        // 3.3. mixColumns
+        // 2.3. mixColumns
         mixColumns(msg);
-        // 3.4. addRoundKey
+        // 2.4. addRoundKey
         addRoundKey(msg, keySchedule[round]);
     }
-    // 4. Final round
-    // 4.1. subBytes
+    // 3. Final round
+    // 3.1. subBytes
     subBytes(msg);
-    // 4.2. shiftRows
+    // 3.2. shiftRows
     shiftRows(msg);
-    // 4.3. addRoundKey
+    // 3.3. addRoundKey
     addRoundKey(msg, keySchedule[round]);
 
     return msg;
@@ -373,16 +358,17 @@ unsigned char* decryptBlock(unsigned char* msg)
     return msg;
 }
 
-int pad(unsigned char* msg, int len)
+int pad(unsigned char* msg, const int len)
 {
     int finalSize = len + (BLOCK_SIZE - (len % BLOCK_SIZE));
-    int padding = 0;
+    int padding = 1;
 
-    // TODO: Implement some viable padding strategy
-    for (int i = len; i < finalSize; i++)
+    msg[len] = 0x80;
+
+    for (int i = len+1; i < finalSize; i++)
     {
         padding++;
-        msg[i] = '\0';
+        msg[i] = 0x00;
     }
 
     return padding;
@@ -393,12 +379,10 @@ unsigned char* encryptECB(unsigned char* msg, int len)
     unsigned char* block;
     int blockNum = 0;
     int numOfBlocks = len/BLOCK_SIZE;
-    // printf("(%i+%i)/%i = %i\n", len, padding, BLOCK_SIZE, numOfBlocks);
 
     while (blockNum < numOfBlocks)
     {
         block = msg + blockNum*BLOCK_SIZE;
-        // printBlock(block);printf("\n");
         encryptBlock(block);
         blockNum++;
     }
@@ -415,7 +399,6 @@ unsigned char* decryptECB(unsigned char* msg, int len)
     while (blockNum < numOfBlocks)
     {
         block = msg + blockNum*BLOCK_SIZE;
-        // printBlock(block);printf("\n");
         decryptBlock(block);
         blockNum++;
     }
@@ -423,20 +406,94 @@ unsigned char* decryptECB(unsigned char* msg, int len)
     return msg;
 }
 
+unsigned char* encryptCBC(unsigned char* msg, int len, unsigned char* iv)
+{
+    unsigned char* block;
+    unsigned char* prev;
+    int numOfBlocks = len/BLOCK_SIZE;
+    int blockNum = 0;
+
+    while (blockNum < numOfBlocks)
+    {
+        block = msg + blockNum*BLOCK_SIZE;
+
+        if (blockNum == 0)
+        {
+            prev = iv;
+        }
+        else
+        {
+            prev = block-BLOCK_SIZE;
+        }
+
+        for (int i = 0; i < BLOCK_SIZE; i++)
+        {
+            block[i] = block[i] ^ prev[i];
+        }
+
+        encryptBlock(block);
+        blockNum++;
+    }
+
+    return msg;
+}
+
+unsigned char* decryptCBC(unsigned char* msg, int len, unsigned char* iv)
+{
+    unsigned char* block;
+    unsigned char* prev;
+    int numOfBlocks = len/BLOCK_SIZE;
+    int blockNum = numOfBlocks-1;
+
+    while (blockNum >= 0)
+    {
+        block = msg + blockNum*BLOCK_SIZE;
+
+        if (blockNum == 0)
+        {
+            prev = iv;
+        }
+        else
+        {
+            prev = msg+(blockNum-1)*BLOCK_SIZE;
+        }
+        
+        decryptBlock(block);
+
+        for (int i = 0; i < BLOCK_SIZE; i++)
+        {
+            block[i] = block[i] ^ prev[i];
+        }
+
+        blockNum--;
+    }
+
+    return msg;
+}
+
 int main()
 {
-    const unsigned char* msg = (unsigned char*)"Hello World! Hello World! Hello World!";
-    unsigned char p[strlen((char*)msg)];
-    int inputLen = strlen((char*)msg);
-    int padding = pad(p, inputLen);
-    int paddedLen = inputLen+padding;
+    const char* msg = "The quick brown fox jumps over the lazy dog.";
+    int inputLen = strlen(msg);
+    unsigned char p[strlen(msg) + (BLOCK_SIZE - (inputLen % BLOCK_SIZE))];
+    strcpy((char*)p, msg);
+    int paddedLen = inputLen + pad(p, inputLen);
 
-    strcpy((char*)p, (char*)msg);
-    printf("%s\n", (char*)p);
+    generateKeySchedule();
+
+    printf("\nECB mode:\n");
+    printf("%.*s\n", inputLen, (char*)p);
     encryptECB(p, paddedLen);
-    printf("%s\n", (char*)p);
+    printf("%.*s\n", paddedLen, (char*)p);
     decryptECB(p, paddedLen);
-    printf("%s\n", (char*)p);
+    printf("%.*s\n", inputLen, (char*)p);
+
+    printf("\nCBC mode:\n");
+    printf("%.*s\n", inputLen, (char*)p);
+    encryptCBC(p, paddedLen, IV);
+    printf("%.*s\n", paddedLen, (char*)p);
+    decryptCBC(p, paddedLen, IV);
+    printf("%.*s\n", inputLen, (char*)p);
 
     return 0;
 }
