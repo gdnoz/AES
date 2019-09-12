@@ -20,28 +20,13 @@ void printBlock(unsigned char* block)
             break;
         }
 
-        printf("%x ", block[i]);
+        printf("%c ", block[i]);
 
         if (i % BLOCK_WIDTH == 3)
         {
             printf("\n");
         }
     }
-}
-
-void printMsg(unsigned char* block, char* delim)
-{
-    for (int i = 0; i < BLOCK_SIZE; i++)
-    {
-        if (block[i] == '\0')
-        {
-            break;
-        }
-
-        printf("%c", block[i]);
-    }
-
-    printf("%s", delim);
 }
 
 unsigned char mul2(unsigned char byte)
@@ -388,12 +373,51 @@ unsigned char* decryptBlock(unsigned char* msg)
     return msg;
 }
 
-unsigned char* pad(unsigned char* msg, int len)
+int pad(unsigned char* msg, int len)
 {
+    int finalSize = len + (BLOCK_SIZE - (len % BLOCK_SIZE));
+    int padding = 0;
+
     // TODO: Implement some viable padding strategy
-    for (int i = len; i < BLOCK_SIZE; i++)
+    for (int i = len; i < finalSize; i++)
     {
+        padding++;
         msg[i] = '\0';
+    }
+
+    return padding;
+}
+
+unsigned char* encryptECB(unsigned char* msg, int len)
+{
+    unsigned char* block;
+    int blockNum = 0;
+    int numOfBlocks = len/BLOCK_SIZE;
+    // printf("(%i+%i)/%i = %i\n", len, padding, BLOCK_SIZE, numOfBlocks);
+
+    while (blockNum < numOfBlocks)
+    {
+        block = msg + blockNum*BLOCK_SIZE;
+        // printBlock(block);printf("\n");
+        encryptBlock(block);
+        blockNum++;
+    }
+
+    return msg;
+}
+
+unsigned char* decryptECB(unsigned char* msg, int len)
+{
+    unsigned char* block;
+    int blockNum = 0;
+    int numOfBlocks = len/BLOCK_SIZE;
+
+    while (blockNum < numOfBlocks)
+    {
+        block = msg + blockNum*BLOCK_SIZE;
+        // printBlock(block);printf("\n");
+        decryptBlock(block);
+        blockNum++;
     }
 
     return msg;
@@ -401,16 +425,18 @@ unsigned char* pad(unsigned char* msg, int len)
 
 int main()
 {
-    const unsigned char* msg = (unsigned char*)"Hello World!";// Hello World! Hello World! Hello World! Hello World! Hello World! Hello World!";
+    const unsigned char* msg = (unsigned char*)"Hello World! Hello World! Hello World!";
     unsigned char p[strlen((char*)msg)];
+    int inputLen = strlen((char*)msg);
+    int padding = pad(p, inputLen);
+    int paddedLen = inputLen+padding;
 
     strcpy((char*)p, (char*)msg);
-    pad(p, strlen((char*)p)); // TODO: When implementing block chaining, only do this for the last block
-    printMsg(p, "\n");
-    encryptBlock(p);
-    printMsg(p, "\n");
-    decryptBlock(p);
-    printMsg(p, "\n");
+    printf("%s\n", (char*)p);
+    encryptECB(p, paddedLen);
+    printf("%s\n", (char*)p);
+    decryptECB(p, paddedLen);
+    printf("%s\n", (char*)p);
 
     return 0;
 }
