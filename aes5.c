@@ -4,7 +4,7 @@
 #include "matrix.c"
 #include "key.c"
 
-#define ROUNDS 10
+#define ROUNDS 4
 #define BLOCK_WIDTH 4
 #define BLOCK_SIZE (BLOCK_WIDTH*BLOCK_WIDTH)
 
@@ -569,6 +569,7 @@ int main()
     generateKeySchedule();
 
     //printf("inputLen = %i\n", inputLen);
+    printLine(keySchedule[4]);
 
     unsigned char p[inputLen];
     for (int i = 0; i < inputLen; i++)
@@ -577,40 +578,65 @@ int main()
     }
     unsigned char p_cpy[inputLen];
 
-    char round_key[] = {0x00, 0x00, 0x00, 0x00,
-                        0x00, 0x00, 0x00, 0x00,
-                        0x00, 0x00, 0x00, 0x00,
-                        0x00, 0x00, 0x00, 0x00};
+    unsigned char round_key_orig[] = {0x33, 0x33, 0x33, 0x33,
+                        0x33, 0x33, 0x33, 0x33,
+                        0x33, 0x33, 0x33, 0x33,
+                        0x33, 0x33, 0x33, 0x33};
+    unsigned char round_key[16];
 
-    char candidates[256] = {0};
-
-    for (int i = 0; i < 256; i++){
-        p[0] = i;
-        encryptECB(p, inputLen);
-        //RoundKey Guess
-        int sum = 0;
-        for (int j = 0; j < 256; j++){
-            //copy the encrypted block
-            for (int i = 0; i < inputLen; i++)
-            {
-                p_cpy[i] = p[i];
+    unsigned char candidates_pre[256]  = {1};   
+    unsigned char candidates_post[256] = {0};
+    for (int k = 0; k < 1; k++){ //unused
+        for (int i = 0; i < 256; i++)
+        {
+            candidates_pre[i] = 1;
+            candidates_post[i] = 0;
+        }    
+    
+        for (int i = 0; i < 256; i++){ //for each possible first-byte combination of plaintext
+            for (int c = 0; c < inputLen; c++){
+                p[c] = msg[c];
             }
-            round_key[0] = i;
-            addRoundKey(p_cpy, round_key); //inverse AddRoundKey = AddRoundKey
-            shiftRowsI(p_cpy);
-            subBytesI(p_cpy);
-            sum ^= p_cpy[0];
-        }
-        if (sum == 0){
-            candidates[p[0]] = 1; 
-            printf("sum: %d \n", sum);
-            printf("test: %d\n", p[0]);
-        }
+            p[0] = i;
+            //printLine(p);
+            encryptECB(p, inputLen);
+            //printLine(p);
+            //RoundKey Guess
+            for (int d = 0; d < 1; d++){ //for each ciphertext byte
+                for (int c = 0; c < inputLen; c++){
+                    round_key[c] = round_key_orig[c];
+                }
+                for (int j = 0; j < 256; j++){ //for each possible roundkey byte
+                    //copy the encrypted block
+                    for (int c = 0; c < inputLen; c++){
+                        p_cpy[c] = p[c];
+                    }
+                    round_key[d] = j;
+                    //printLine(round_key);
+                    addRoundKey(p_cpy, round_key); //inverse AddRoundKey = AddRoundKey
+                    shiftRowsI(p_cpy);
+                    subBytesI(p_cpy);
+                    //sum
+                    unsigned char sum = 0;
+                    for (int b = 0; b < inputLen; b++){
+                        sum ^= p_cpy[b];
+                    }
 
-        //printBlocks(p, inputLen);
-        //decryptECB(p, inputLen);
-        //printBlocks(p, inputLen);
+                    if (sum == 0){
+                        printf("potential candidate: %x %x %x\n", d, i, round_key[0]);
+                        if (candidates_pre[ round_key[0] ] == 1){
+                            candidates_post[ round_key[0] ] = 1;
+                            printf("test: %x %x %x\n", d, i, round_key[0]);
+                        }
+                    }
+                }
+            }
+                            //new round of candidates
+        for (int a = 0; a < 256; a++){
+            candidates_pre[a] = candidates_post[a]; 
+            candidates_post[a] = 0;
+        }
+        }
     }
-
     return 0;
 }
