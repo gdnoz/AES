@@ -561,38 +561,50 @@ unsigned char* decryptCBC(unsigned char* msg, int len, unsigned char* iv)
 
 int main()
 {
-    const char msg[] = {0x00, 0x01, 0x01, 0x01,
-                        0x01, 0x01, 0x01, 0x01,
-                        0x01, 0x01, 0x01, 0x01,
-                        0x01, 0x01, 0x01, 0x01};    
+    const char msg[] = {0x00, 0x22, 0x22, 0x22,
+                        0x22, 0x22, 0x22, 0x22,
+                        0x22, 0x22, 0x22, 0x22,
+                        0x22, 0x22, 0x22, 0x22};    
     int inputLen = sizeof(msg)/sizeof(char);
     generateKeySchedule();
 
     //printf("inputLen = %i\n", inputLen);
 
-    unsigned char p[inputLen + (BLOCK_SIZE - (inputLen % BLOCK_SIZE))];
+    unsigned char p[inputLen];
     for (int i = 0; i < inputLen; i++)
     {
         p[i] = msg[i];
     }
+    unsigned char p_cpy[inputLen];
 
     char round_key[] = {0x00, 0x00, 0x00, 0x00,
-                            0x00, 0x00, 0x00, 0x00,
-                            0x00, 0x00, 0x00, 0x00,
-                            0x00, 0x00, 0x00, 0x00};
+                        0x00, 0x00, 0x00, 0x00,
+                        0x00, 0x00, 0x00, 0x00,
+                        0x00, 0x00, 0x00, 0x00};
+
+    char candidates[256] = {0};
 
     for (int i = 0; i < 256; i++){
         p[0] = i;
-        //printf("\nECB mode:\n");
-        //printBlocks(p, inputLen);
         encryptECB(p, inputLen);
         //RoundKey Guess
-        round_key[0] = 0;
+        int sum = 0;
         for (int j = 0; j < 256; j++){
+            //copy the encrypted block
+            for (int i = 0; i < inputLen; i++)
+            {
+                p_cpy[i] = p[i];
+            }
             round_key[0] = i;
-            addRoundKey(p, round_key); //inverse AddRoundKey = AddRoundKey
-            shiftRowsI(p);
-            subBytesI(p);
+            addRoundKey(p_cpy, round_key); //inverse AddRoundKey = AddRoundKey
+            shiftRowsI(p_cpy);
+            subBytesI(p_cpy);
+            sum ^= p_cpy[0];
+        }
+        if (sum == 0){
+            candidates[p[0]] = 1; 
+            printf("sum: %d \n", sum);
+            printf("test: %d\n", p[0]);
         }
 
         //printBlocks(p, inputLen);
